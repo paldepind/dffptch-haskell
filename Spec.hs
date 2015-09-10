@@ -42,6 +42,10 @@ dummyUser5 = objFromList [ (pack "name", String $ pack "Simon")
 
 dummyUser6 = objFromList [(pack "age", Number 21)]
 
+dummyUser7 = objFromList [ (pack "name", String $ pack "Simon")
+                         , (pack "age", Number 21)
+                         , (pack "male", Bool False)
+                         ]
 main :: IO ()
 main = hspec $ do
   describe "toSortedList" $
@@ -85,8 +89,8 @@ main = hspec $ do
 
     it "detects several removed fields at end" $
       diff dummyUser dummyUser6 `shouldBe`
-      objFromList [(pack "d", Array $ V.fromList [Number 1, Number 2])]
+      objFromList [(pack "d", Array $ V.fromList [Number 2, Number 1])]
 
-    --it "detects modified fields" $
-      --diff dummyUser dummyUser5 `shouldBe`
-      --objFromList [(pack "m", objFromList [(pack "1", Number 22)])]
+    it "detects modified fields" $
+      diff dummyUser dummyUser7 `shouldBe`
+      objFromList [(pack "m", objFromList [(pack "1", Bool False)])]

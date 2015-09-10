@@ -5,9 +5,10 @@ import Data.Aeson
 import qualified Data.ByteString.Lazy as B
 import qualified Data.HashMap.Strict as H
 import qualified Data.Vector as V
-import Data.Text (Text, pack)
+import Data.Text (Text, pack, singleton)
 import Data.List
 import Data.Scientific as Scientific
+import Data.Char (chr)
 
 data Delta = Delta
     { adds     :: Object -- Added keys
@@ -23,34 +24,38 @@ emptyDelta = Delta emptyObject emptyObject [] emptyObject
 toSortedList :: Object -> [(Text, Value)]
 toSortedList = sortOn fst . H.toList
 
-addMod :: Delta -> Text -> Value -> Delta
-addMod d k v = d { mods = H.insert k v (mods d) }
 
 addAdd :: Delta -> Text -> Value -> Delta
 addAdd d k v = d { adds = H.insert k v (adds d) }
 
-addRm :: Delta -> Scientific -> Delta
-addRm d idx = d { dels = idx : (dels d) }
+addRm :: Delta -> Int -> Delta
+addRm d idx = d { dels = (fromIntegral idx) : (dels d) }
 
-findMod :: Delta -> Text -> Value -> Value -> Delta
-findMod delta key aVal bVal =
-  if aVal == bVal then delta else addMod delta key bVal
+addMod_ :: Delta -> Int -> Value -> Delta
+addMod_ d idx v = d { mods = H.insert char v (mods d) }
+  where char = singleton . chr $ 48 + idx
 
-findChange :: Delta -> Scientific -> [(Text, Value)] -> [(Text, Value)] -> Delta
+addMod :: Delta -> Int -> Text -> Value -> Value -> Delta
+addMod delta idx key aVal bVal =
+  if aVal == bVal
+    then delta
+    else addMod_ delta idx bVal
+
+findChange :: Delta -> Int -> [(Text, Value)] -> [(Text, Value)] -> Delta
 findChange delta _ [] [] = delta
 findChange delta aIdx [] ((bKey,bVal):bs) = findChange (addAdd delta bKey bVal) aIdx [] bs
 findChange delta aIdx a@((aKey,aVal):as) [] = findChange (addRm delta aIdx) (aIdx+1) as []
 findChange delta aIdx a@((aKey,aVal):as) b@((bKey,bVal):bs) =
   case compare aKey bKey of
-    -- EQ -> findMod delta aKey aVal bVal
-    EQ -> findChange delta (aIdx+1) as bs
+    EQ -> findChange (addMod delta aIdx aKey aVal bVal) (aIdx+1) as bs
+    --EQ -> findChange delta (aIdx+1) as bs
     LT -> findChange (addRm delta aIdx) (aIdx+1) as b
     GT -> findChange (addAdd delta bKey bVal) aIdx a bs
 
-addIf :: Delta -> (Delta -> Object) -> Object -> Object
-addIf delta prop diff =
+addIf :: Delta -> Char -> (Delta -> Object) -> Object -> Object
+addIf delta name prop diff =
   if prop delta /= emptyObject
-    then H.insert (pack "a") (Object $ prop delta) diff
+    then H.insert (singleton name) (Object $ prop delta) diff
     else diff
 
 extractDels :: Delta -> Object -> Object
@@ -60,7 +65,7 @@ extractDels delta diff =
     else diff
 
 deltaToObject :: Delta -> Object
-deltaToObject delta = extractDels delta . addIf delta adds $ H.empty
+deltaToObject delta = extractDels delta . addIf delta 'a' adds . addIf delta 'm' mods $ H.empty
 
 diff :: Value -> Value -> Value
 diff (Array old) (Array new) = Array old
