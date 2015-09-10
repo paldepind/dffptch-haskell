@@ -1,0 +1,92 @@
+module DffptchSpec where
+
+import Test.Hspec
+import Data.Aeson
+import qualified Data.Vector as V
+import qualified Data.HashMap.Strict as H
+--import qualified Data.Text.Lazy as L
+import Data.Text (pack)
+
+
+import Dffptch.Internal
+
+objFromList = Object . H.fromList
+
+dummyUser = objFromList [ (pack "name", String $ pack "Simon")
+                        , (pack "age", Number 21)
+                        , (pack "male", Bool True)
+                        ]
+
+dummyUser2 = objFromList [ (pack "name", String $ pack "Simon")
+                         , (pack "age", Number 21)
+                         , (pack "location", String $ pack "Denmark")
+                         , (pack "male", Bool True)
+                         ]
+
+dummyUser3 = objFromList [ (pack "name", String $ pack "Simon")
+                         , (pack "age", Number 21)
+                         , (pack "male", Bool True)
+                         , (pack "occupation", String $ pack "Programmer")
+                         ]
+
+dummyUser4 = objFromList [ (pack "name", String $ pack "Simon")
+                         , (pack "age", Number 21)
+                         , (pack "male", Bool True)
+                         , (pack "sex", String $ pack "Male")
+                         , (pack "occupation", String $ pack "Programmer")
+                         ]
+
+dummyUser5 = objFromList [ (pack "name", String $ pack "Simon")
+                         , (pack "age", Number 21)
+                         ]
+
+dummyUser6 = objFromList [(pack "age", Number 21)]
+
+main :: IO ()
+main = hspec $ do
+  describe "toSortedList" $
+    it "return a list from hashmap sorted by keys" $
+      (toSortedList . H.fromList) [(pack "b", Number 2), (pack "foo", Number 0), (pack "a", Number 1)]
+      `shouldBe` [(pack "a", Number 1), (pack "b", Number 2), (pack "foo", Number 0)]
+  describe "patch" $ do
+    it "returns its first argument" $
+      patch (Number 1) (Number 2) `shouldBe` Number 1
+
+    it "returns its first array" $
+      patch (Array $ V.fromList [Number 1, Number 2, Number 3]) (Array $ V.fromList [Number 4, Number 5, Number 6])
+      `shouldBe` (Array $ V.fromList [Number 1, Number 2, Number 3])
+
+  describe "diff" $ do
+    it "returns its second argument" $
+      diff (Number 1) (Number 2) `shouldBe` Number 2
+
+    it "returns its first array" $
+      diff (Array $ V.fromList [Number 1, Number 2, Number 3]) (Array $ V.fromList [Number 4, Number 5, Number 6])
+      `shouldBe` (Array $ V.fromList [Number 1, Number 2, Number 3])
+
+    it "return empty object on equal object" $
+      diff dummyUser dummyUser `shouldBe` Object H.empty
+
+    it "detects added field" $
+      diff dummyUser dummyUser2 `shouldBe`
+      objFromList [(pack "a", objFromList [(pack "location", String $ pack "Denmark")])]
+
+    it "detects added field at end" $
+      diff dummyUser dummyUser3 `shouldBe`
+      objFromList [(pack "a", objFromList [(pack "occupation", String $ pack "Programmer")])]
+
+    it "detects several added fields at end" $
+      diff dummyUser dummyUser4 `shouldBe`
+      objFromList [(pack "a", objFromList [(pack "occupation", String $ pack "Programmer"),
+                                           (pack "sex", String $ pack "Male")])]
+    it "detects removed fields at end" $
+      diff dummyUser dummyUser5 `shouldBe`
+      objFromList [(pack "d",  Array $ V.fromList [Number 1])]
+
+    it "detects several removed fields at end" $
+      diff dummyUser dummyUser6 `shouldBe`
+      objFromList [(pack "d", Array $ V.fromList [Number 1, Number 2])]
+
+    --it "detects modified fields" $
+      --diff dummyUser dummyUser5 `shouldBe`
+      --objFromList [(pack "m", objFromList [(pack "1", Number 22)])]
