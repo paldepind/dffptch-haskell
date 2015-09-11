@@ -9,6 +9,7 @@ import Data.Text (Text, pack, singleton)
 import Data.List
 import Data.Scientific as Scientific
 import Data.Char (chr)
+import Data.Ord
 
 data Delta = Delta
     { adds     :: Object -- Added keys
@@ -41,16 +42,20 @@ addMod delta idx key aVal bVal =
     then delta
     else addMod_ delta idx bVal
 
-findChange :: Delta -> Int -> [(Text, Value)] -> [(Text, Value)] -> Delta
-findChange delta _ [] [] = delta
-findChange delta aIdx [] ((bKey,bVal):bs) = findChange (addAdd delta bKey bVal) aIdx [] bs
-findChange delta aIdx a@((aKey,aVal):as) [] = findChange (addRm delta aIdx) (aIdx+1) as []
-findChange delta aIdx a@((aKey,aVal):as) b@((bKey,bVal):bs) =
-  case compare aKey bKey of
-    EQ -> findChange (addMod delta aIdx aKey aVal bVal) (aIdx+1) as bs
-    --EQ -> findChange delta (aIdx+1) as bs
-    LT -> findChange (addRm delta aIdx) (aIdx+1) as b
-    GT -> findChange (addAdd delta bKey bVal) aIdx a bs
+mergeWith :: (a -> b -> Ordering) -> (c -> a -> c) -> (c -> b -> c) -> (c -> a -> b -> c) -> c -> [a] -> [b] -> c
+mergeWith comparer fa fb fab = go where
+  go acc as [] = foldl fa acc as 
+  go acc [] bs = foldl fb acc bs
+  go acc ass@(a:as) bss@(b:bs) = case comparer a b of
+    EQ -> go (fab acc a b) as  bs
+    LT -> go (fa acc a   ) as  bss
+    GT -> go (fb acc    b) ass bs
+
+findChange :: [(Text, Value)] -> [(Text, Value)] -> Delta
+findChange as bs = snd $ mergeWith (comparing fst) fa fb fab (0, emptyDelta) as bs where
+  fa (aIdx, delta)  (aKey,aVal)               = (aIdx + 1, addRm delta aIdx)
+  fb (aIdx, delta)               (bKey, bVal) = (aIdx    , addAdd delta bKey bVal)
+  fab (aIdx, delta) (aKey, aVal) (bKey, bVal) = (aIdx + 1, addMod delta aIdx aKey aVal bVal)
 
 addIf :: Delta -> Char -> (Delta -> Object) -> Object -> Object
 addIf delta name prop diff =
@@ -69,7 +74,8 @@ deltaToObject delta = extractDels delta . addIf delta 'a' adds . addIf delta 'm'
 
 diff :: Value -> Value -> Value
 diff (Array old) (Array new) = Array old
-diff (Object old) (Object new) = Object . deltaToObject $ findChange emptyDelta 0 o n
+-- diff (Object old) (Object new) = Object . deltaToObject $ findChange emptyDelta 0 o n
+diff (Object old) (Object new) = Object . deltaToObject $ findChange o n
   where o = toSortedList old
         n = toSortedList new
 diff old new = new
