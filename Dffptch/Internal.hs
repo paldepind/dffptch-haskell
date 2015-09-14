@@ -25,7 +25,6 @@ emptyDelta = Delta emptyObject emptyObject [] emptyObject
 toSortedList :: Object -> [(Text, Value)]
 toSortedList = sortOn fst . H.toList
 
-
 addAdd :: Delta -> Text -> Value -> Delta
 addAdd d k v = d { adds = H.insert k v (adds d) }
 
@@ -36,15 +35,20 @@ addMod_ :: Delta -> Int -> Value -> Delta
 addMod_ d idx v = d { mods = H.insert char v (mods d) }
   where char = singleton . chr $ 48 + idx
 
+addRec :: Delta -> Int -> Value -> Delta
+addRec d idx v = d { recurses = H.insert char v (mods d) }
+  where char = singleton . chr $ 48 + idx
+
 addMod :: Delta -> Int -> Text -> Value -> Value -> Delta
+addMod delta idx key (Object aObj) (Object bObj) =
+  if aObj == bObj then delta else addRec delta idx recursiveDelta
+  where recursiveDelta = Object . deltaToObject $ findChange (H.toList aObj) (H.toList bObj)
 addMod delta idx key aVal bVal =
-  if aVal == bVal
-    then delta
-    else addMod_ delta idx bVal
+  if aVal == bVal then delta else addMod_ delta idx bVal
 
 mergeWith :: (a -> b -> Ordering) -> (c -> a -> c) -> (c -> b -> c) -> (c -> a -> b -> c) -> c -> [a] -> [b] -> c
 mergeWith comparer fa fb fab = go where
-  go acc as [] = foldl fa acc as 
+  go acc as [] = foldl fa acc as
   go acc [] bs = foldl fb acc bs
   go acc ass@(a:as) bss@(b:bs) = case comparer a b of
     EQ -> go (fab acc a b) as  bs
@@ -70,11 +74,10 @@ extractDels delta diff =
     else diff
 
 deltaToObject :: Delta -> Object
-deltaToObject delta = extractDels delta . addIf delta 'a' adds . addIf delta 'm' mods $ H.empty
+deltaToObject delta = extractDels delta . addIf delta 'r' recurses . addIf delta 'a' adds . addIf delta 'm' mods $ H.empty
 
 diff :: Value -> Value -> Value
 diff (Array old) (Array new) = Array old
--- diff (Object old) (Object new) = Object . deltaToObject $ findChange emptyDelta 0 o n
 diff (Object old) (Object new) = Object . deltaToObject $ findChange o n
   where o = toSortedList old
         n = toSortedList new

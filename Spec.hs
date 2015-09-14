@@ -40,12 +40,39 @@ dummyUser5 = objFromList [ (pack "name", String $ pack "Simon")
                          , (pack "age", Number 21)
                          ]
 
-dummyUser6 = objFromList [(pack "age", Number 21)]
+dummyUser6 = objFromList [ (pack "age", Number 21)
+                         ]
 
 dummyUser7 = objFromList [ (pack "name", String $ pack "Simon")
                          , (pack "age", Number 21)
                          , (pack "male", Bool False)
                          ]
+
+dummyHorse = objFromList [ (pack "type", String $ pack "horse")
+                         , (pack "parent", objFromList
+                             [ (pack "type", String $ pack "goat")
+                             , (pack "color", String $ pack "brown")
+                             ])
+                         ]
+
+dummyHorse2 = objFromList [ (pack "type", String $ pack "horse")
+                          , (pack "parent", objFromList
+                              [ (pack "type", String $ pack "goat")
+                              , (pack "color", String $ pack "blue")
+                              ])
+                          ]
+
+dummyGoat = objFromList [ (pack "type", String $ pack "goat")
+                        , (pack "parent", objFromList
+                            [ (pack "type", String $ pack "goat")
+                            , (pack "color", String $ pack "grey")
+                            , (pack "parent", objFromList
+                                [ (pack "type", String $ pack "horse")
+                                , (pack "color", String $ pack "light-grey")
+                                ])
+                            ])
+                        ]
+
 main :: IO ()
 main = hspec $ do
   describe "toSortedList" $
@@ -94,3 +121,10 @@ main = hspec $ do
     it "detects modified fields" $
       diff dummyUser dummyUser7 `shouldBe`
       objFromList [(pack "m", objFromList [(pack "1", Bool False)])]
+
+    it "diffs recursively" $
+      diff dummyHorse dummyHorse2 `shouldBe`
+      objFromList [(pack "r", objFromList [(pack "0", 
+        objFromList [(pack "m", objFromList [(pack "0", String $ pack "blue")])]
+      )])]
+
