@@ -25,6 +25,9 @@ emptyDelta = Delta emptyObject emptyObject [] emptyObject
 toSortedList :: Object -> [(Text, Value)]
 toSortedList = sortOn fst . H.toList
 
+arrToObj :: Array -> Value
+arrToObj = Object . H.fromList . zip (map (pack . show) [0..]) . V.toList
+
 addAdd :: Delta -> Text -> Value -> Delta
 addAdd d k v = d { adds = H.insert k v (adds d) }
 
@@ -43,6 +46,8 @@ addMod :: Delta -> Int -> Text -> Value -> Value -> Delta
 addMod delta idx key (Object aObj) (Object bObj) =
   if aObj == bObj then delta else addRec delta idx recursiveDelta
   where recursiveDelta = Object . deltaToObject $ findChange (H.toList aObj) (H.toList bObj)
+addMod delta idx key (Array aArr) (Array bArr) =
+  addMod delta idx key (arrToObj aArr) (arrToObj bArr)
 addMod delta idx key aVal bVal =
   if aVal == bVal then delta else addMod_ delta idx bVal
 
@@ -77,7 +82,7 @@ deltaToObject :: Delta -> Object
 deltaToObject delta = extractDels delta . addIf delta 'r' recurses . addIf delta 'a' adds . addIf delta 'm' mods $ H.empty
 
 diff :: Value -> Value -> Value
-diff (Array old) (Array new) = Array old
+diff (Array old) (Array new) = diff (arrToObj old) (arrToObj new)
 diff (Object old) (Object new) = Object . deltaToObject $ findChange o n
   where o = toSortedList old
         n = toSortedList new

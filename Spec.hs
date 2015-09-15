@@ -73,6 +73,13 @@ dummyGoat = objFromList [ (pack "type", String $ pack "goat")
                             ])
                         ]
 
+arr1 = Array $ V.fromList [Number 1, Number 2, Number 3]
+
+arr2 = Array $ V.fromList [Number 1, Number 4, Number 3]
+
+nestedArr1 = objFromList [ (pack "arr", arr1) ]
+nestedArr2 = objFromList [ (pack "arr", arr2) ]
+
 main :: IO ()
 main = hspec $ do
   describe "toSortedList" $
@@ -90,10 +97,6 @@ main = hspec $ do
   describe "diff" $ do
     it "returns its second argument" $
       diff (Number 1) (Number 2) `shouldBe` Number 2
-
-    it "returns its first array" $
-      diff (Array $ V.fromList [Number 1, Number 2, Number 3]) (Array $ V.fromList [Number 4, Number 5, Number 6])
-      `shouldBe` (Array $ V.fromList [Number 1, Number 2, Number 3])
 
     it "return empty object on equal object" $
       diff dummyUser dummyUser `shouldBe` Object H.empty
@@ -124,7 +127,16 @@ main = hspec $ do
 
     it "diffs recursively" $
       diff dummyHorse dummyHorse2 `shouldBe`
-      objFromList [(pack "r", objFromList [(pack "0", 
+      objFromList [(pack "r", objFromList [(pack "0",
         objFromList [(pack "m", objFromList [(pack "0", String $ pack "blue")])]
       )])]
 
+    it "handles changes in arrays" $
+      diff arr1 arr2
+      `shouldBe` objFromList [(pack "m", objFromList [(pack "1", Number 4)])]
+
+    it "handles changes in nested arrays" $
+      diff nestedArr1 nestedArr2 `shouldBe`
+      objFromList [(pack "r", objFromList [(pack "0",
+        objFromList [(pack "m", objFromList [(pack "1", Number 4)])]
+      )])]
