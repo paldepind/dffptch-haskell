@@ -28,28 +28,32 @@ toSortedList = sortOn fst . H.toList
 arrToObj :: Array -> Value
 arrToObj = Object . H.fromList . zip (map (pack . show) [0..]) . V.toList
 
+idxToText :: Int -> Text
+idxToText = singleton . chr . (+48)
+
 addAdd :: Delta -> Text -> Value -> Delta
 addAdd d k v = d { adds = H.insert k v (adds d) }
 
 addRm :: Delta -> Int -> Delta
 addRm d idx = d { dels = (fromIntegral idx) : (dels d) }
 
-addMod_ :: Delta -> Int -> Value -> Delta
-addMod_ d idx v = d { mods = H.insert char v (mods d) }
-  where char = singleton . chr $ 48 + idx
+addChange :: Delta -> (Delta -> Object) -> Int -> Value -> Object
+addChange d field idx val = H.insert (idxToText idx) val (field d)
+
+addMod :: Delta -> Int -> Value -> Delta
+addMod d idx v = d { mods = (addChange d mods idx v) }
 
 addRec :: Delta -> Int -> Value -> Delta
-addRec d idx v = d { recurses = H.insert char v (mods d) }
-  where char = singleton . chr $ 48 + idx
+addRec d idx v = d { recurses = (addChange d recurses idx v) }
 
-addMod :: Delta -> Int -> Text -> Value -> Value -> Delta
-addMod delta idx key (Object aObj) (Object bObj) =
+findMod :: Delta -> Int -> Text -> Value -> Value -> Delta
+findMod delta idx key (Object aObj) (Object bObj) =
   if aObj == bObj then delta else addRec delta idx recursiveDelta
   where recursiveDelta = Object . deltaToObject $ findChange (H.toList aObj) (H.toList bObj)
-addMod delta idx key (Array aArr) (Array bArr) =
-  addMod delta idx key (arrToObj aArr) (arrToObj bArr)
-addMod delta idx key aVal bVal =
-  if aVal == bVal then delta else addMod_ delta idx bVal
+findMod delta idx key (Array aArr) (Array bArr) =
+  findMod delta idx key (arrToObj aArr) (arrToObj bArr)
+findMod delta idx key aVal bVal =
+  if aVal == bVal then delta else addMod delta idx bVal
 
 mergeWith :: (a -> b -> Ordering) -> (c -> a -> c) -> (c -> b -> c) -> (c -> a -> b -> c) -> c -> [a] -> [b] -> c
 mergeWith comparer fa fb fab = go where
@@ -64,22 +68,22 @@ findChange :: [(Text, Value)] -> [(Text, Value)] -> Delta
 findChange as bs = snd $ mergeWith (comparing fst) fa fb fab (0, emptyDelta) as bs where
   fa (aIdx, delta)  (aKey,aVal)               = (aIdx + 1, addRm delta aIdx)
   fb (aIdx, delta)               (bKey, bVal) = (aIdx    , addAdd delta bKey bVal)
-  fab (aIdx, delta) (aKey, aVal) (bKey, bVal) = (aIdx + 1, addMod delta aIdx aKey aVal bVal)
+  fab (aIdx, delta) (aKey, aVal) (bKey, bVal) = (aIdx + 1, findMod delta aIdx aKey aVal bVal)
 
-addIf :: Delta -> Char -> (Delta -> Object) -> Object -> Object
-addIf delta name prop diff =
+addIf :: Char -> (Delta -> Object) -> Delta -> Object -> Object
+addIf name prop delta diff =
   if prop delta /= emptyObject
     then H.insert (singleton name) (Object $ prop delta) diff
     else diff
 
 extractDels :: Delta -> Object -> Object
 extractDels delta diff =
-  if dels delta /= []
-    then H.insert (pack "d") (Array . V.fromList . map Number . dels $ delta) diff
-    else diff
+  if not . null $ dels delta then H.insert (pack "d") (toNumArr delta) diff else diff
+  where toNumArr = Array . V.fromList . map Number . dels
 
 deltaToObject :: Delta -> Object
-deltaToObject delta = extractDels delta . addIf delta 'r' recurses . addIf delta 'a' adds . addIf delta 'm' mods $ H.empty
+deltaToObject delta = extract H.empty
+  where extract = mconcat $ map ($ delta) [extractDels, addIf 'r' recurses, addIf 'a' adds, addIf 'm' mods]
 
 diff :: Value -> Value -> Value
 diff (Array old) (Array new) = diff (arrToObj old) (arrToObj new)
