@@ -86,13 +86,6 @@ main = hspec $ do
     it "return a list from hashmap sorted by keys" $
       (toSortedList . H.fromList) [(pack "b", Number 2), (pack "foo", Number 0), (pack "a", Number 1)]
       `shouldBe` [(pack "a", Number 1), (pack "b", Number 2), (pack "foo", Number 0)]
-  describe "patch" $ do
-    it "returns its first argument" $
-      patch (Number 1) (Number 2) `shouldBe` Number 1
-
-    it "returns its first array" $
-      patch (Array $ V.fromList [Number 1, Number 2, Number 3]) (Array $ V.fromList [Number 4, Number 5, Number 6])
-      `shouldBe` (Array $ V.fromList [Number 1, Number 2, Number 3])
 
   describe "diff" $ do
     it "returns its second argument" $
@@ -140,3 +133,14 @@ main = hspec $ do
       objFromList [(pack "r", objFromList [(pack "0",
         objFromList [(pack "m", objFromList [(pack "1", Number 4)])]
       )])]
+
+  describe "patch" $ do
+    it "returns its first argument" $
+      patch (Number 1) (Number 2) `shouldBe` Number 1
+
+    it "handles modified field" $
+      patch dummyUser (diff dummyUser dummyUser7) `shouldBe` dummyUser7
+
+    it "returns its first array" $
+      patch (Array $ V.fromList [Number 1, Number 2, Number 3]) (Array $ V.fromList [Number 4, Number 5, Number 6])
+      `shouldBe` (Array $ V.fromList [Number 1, Number 2, Number 3])

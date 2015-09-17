@@ -5,10 +5,10 @@ import Data.Aeson
 import qualified Data.ByteString.Lazy as B
 import qualified Data.HashMap.Strict as H
 import qualified Data.Vector as V
-import Data.Text (Text, pack, singleton)
+import qualified Data.Text as Text
 import Data.List
 import Data.Scientific as Scientific
-import Data.Char (chr)
+import qualified Data.Char as Char
 import Data.Ord
 
 data Delta = Delta
@@ -22,16 +22,16 @@ emptyObject = H.empty
 
 emptyDelta = Delta emptyObject emptyObject [] emptyObject
 
-toSortedList :: Object -> [(Text, Value)]
+toSortedList :: Object -> [(Text.Text, Value)]
 toSortedList = sortOn fst . H.toList
 
 arrToObj :: Array -> Value
-arrToObj = Object . H.fromList . zip (map (pack . show) [0..]) . V.toList
+arrToObj = Object . H.fromList . zip (map (Text.pack . show) [0..]) . V.toList
 
-idxToText :: Int -> Text
-idxToText = singleton . chr . (+48)
+idxToText :: Int -> Text.Text
+idxToText = Text.singleton . Char.chr . (+48)
 
-addAdd :: Delta -> Text -> Value -> Delta
+addAdd :: Delta -> Text.Text -> Value -> Delta
 addAdd d k v = d { adds = H.insert k v (adds d) }
 
 addRm :: Delta -> Int -> Delta
@@ -46,7 +46,7 @@ addMod d idx v = d { mods = (addChange d mods idx v) }
 addRec :: Delta -> Int -> Value -> Delta
 addRec d idx v = d { recurses = (addChange d recurses idx v) }
 
-findMod :: Delta -> Int -> Text -> Value -> Value -> Delta
+findMod :: Delta -> Int -> Text.Text -> Value -> Value -> Delta
 findMod delta idx key (Object aObj) (Object bObj) =
   if aObj == bObj then delta else addRec delta idx recursiveDelta
   where recursiveDelta = Object . deltaToObject $ findChange (H.toList aObj) (H.toList bObj)
@@ -64,7 +64,7 @@ mergeWith comparer fa fb fab = go where
     LT -> go (fa acc a   ) as  bss
     GT -> go (fb acc    b) ass bs
 
-findChange :: [(Text, Value)] -> [(Text, Value)] -> Delta
+findChange :: [(Text.Text, Value)] -> [(Text.Text, Value)] -> Delta
 findChange as bs = snd $ mergeWith (comparing fst) fa fb fab (0, emptyDelta) as bs where
   fa (aIdx, delta)  (aKey,aVal)               = (aIdx + 1, addRm delta aIdx)
   fb (aIdx, delta)               (bKey, bVal) = (aIdx    , addAdd delta bKey bVal)
@@ -73,12 +73,12 @@ findChange as bs = snd $ mergeWith (comparing fst) fa fb fab (0, emptyDelta) as 
 addIf :: Char -> (Delta -> Object) -> Delta -> Object -> Object
 addIf name prop delta diff =
   if prop delta /= emptyObject
-    then H.insert (singleton name) (Object $ prop delta) diff
+    then H.insert (Text.singleton name) (Object $ prop delta) diff
     else diff
 
 extractDels :: Delta -> Object -> Object
 extractDels delta diff =
-  if not . null $ dels delta then H.insert (pack "d") (toNumArr delta) diff else diff
+  if not . null $ dels delta then H.insert (Text.pack "d") (toNumArr delta) diff else diff
   where toNumArr = Array . V.fromList . map Number . dels
 
 deltaToObject :: Delta -> Object
@@ -92,5 +92,16 @@ diff (Object old) (Object new) = Object . deltaToObject $ findChange o n
         n = toSortedList new
 diff old new = new
 
+createKeys :: Object -> V.Vector Text.Text
+createKeys = V.fromList . sort . H.keys
+
+handleMod :: Object -> V.Vector Text.Text -> [(Text.Text, Value)] -> Object
+handleMod obj _ [] = obj
+handleMod obj keys ((key,val):mods) = handleMod newObj keys mods
+  where newObj = H.insert (keys V.! (Char.ord (Text.head key) - 48)) val obj
+
 patch :: Value -> Value -> Value
+patch (Object obj) (Object delta) = Object $ handleMod obj keys (H.toList mods)
+  where keys = createKeys obj
+        Object mods = delta H.! Text.pack "m"
 patch obj delta = obj
