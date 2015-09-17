@@ -92,16 +92,39 @@ diff (Object old) (Object new) = Object . deltaToObject $ findChange o n
         n = toSortedList new
 diff old new = new
 
+keyToIdx :: Text.Text -> Int
+keyToIdx = (subtract 48) . Char.ord . Text.head
+
 createKeys :: Object -> V.Vector Text.Text
 createKeys = V.fromList . sort . H.keys
 
-handleMod :: Object -> V.Vector Text.Text -> [(Text.Text, Value)] -> Object
-handleMod obj _ [] = obj
-handleMod obj keys ((key,val):mods) = handleMod newObj keys mods
-  where newObj = H.insert (keys V.! (Char.ord (Text.head key) - 48)) val obj
+valToInt :: Value -> Maybe Int
+valToInt (Number scient) = Scientific.toBoundedInteger scient
+
+handleAdds :: Object -> Value -> Object
+handleAdds obj adds = obj
+
+handleMods_ :: Object -> V.Vector Text.Text -> [(Text.Text, Value)] -> Object
+handleMods_ obj _ [] = obj
+handleMods_ obj keys ((key,val):mods) = handleMods_ newObj keys mods
+  where newObj = H.insert (keys V.! keyToIdx key) val obj
+
+handleMods :: Object -> Value -> Object
+handleMods obj (Object mods) = handleMods_ obj (createKeys obj) $ H.toList mods
+
+handleDels :: Object -> Value -> Object
+handleDels obj (Array dels) = foldr H.delete obj deleted
+  where keys = (createKeys obj)
+        deleted = map (keys V.!) . catMaybes . map valToInt . V.toList $ dels
+
+handleRecs :: Object -> Value -> Object
+handleRecs obj recs = obj
+
+fields = map Text.pack ["a", "m", "d", "r"]
+handlers = [handleAdds, handleMods, handleDels, handleRecs]
 
 patch :: Value -> Value -> Value
-patch (Object obj) (Object delta) = Object $ handleMod obj keys (H.toList mods)
-  where keys = createKeys obj
-        Object mods = delta H.! Text.pack "m"
+patch (Object obj) (Object delta) = Object . foldr ap obj $ fnsVals
+  where fnsVals = zip handlers $ map (flip H.lookup delta) fields
+        ap (fn,val) obj = maybe obj (fn obj) val
 patch obj delta = obj

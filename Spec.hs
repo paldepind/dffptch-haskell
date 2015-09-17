@@ -106,11 +106,11 @@ main = hspec $ do
       diff dummyUser dummyUser4 `shouldBe`
       objFromList [(pack "a", objFromList [(pack "occupation", String $ pack "Programmer"),
                                            (pack "sex", String $ pack "Male")])]
-    it "detects removed fields at end" $
+    it "detects deleted fields at end" $
       diff dummyUser dummyUser5 `shouldBe`
       objFromList [(pack "d",  Array $ V.fromList [Number 1])]
 
-    it "detects several removed fields at end" $
+    it "detects several deleted fields at end" $
       diff dummyUser dummyUser6 `shouldBe`
       objFromList [(pack "d", Array $ V.fromList [Number 2, Number 1])]
 
@@ -135,12 +135,15 @@ main = hspec $ do
       )])]
 
   describe "patch" $ do
-    it "returns its first argument" $
-      patch (Number 1) (Number 2) `shouldBe` Number 1
+    -- it "returns its first argument" $
+      -- patch (Number 1) (Number 2) `shouldBe` Number 1
 
     it "handles modified field" $
       patch dummyUser (diff dummyUser dummyUser7) `shouldBe` dummyUser7
 
-    it "returns its first array" $
-      patch (Array $ V.fromList [Number 1, Number 2, Number 3]) (Array $ V.fromList [Number 4, Number 5, Number 6])
-      `shouldBe` (Array $ V.fromList [Number 1, Number 2, Number 3])
+    it "handles deleted fields" $
+      patch dummyUser (diff dummyUser dummyUser6) `shouldBe` dummyUser6
+
+    -- it "returns its first array" $
+      -- patch (Array $ V.fromList [Number 1, Number 2, Number 3]) (Array $ V.fromList [Number 4, Number 5, Number 6])
+      -- `shouldBe` (Array $ V.fromList [Number 1, Number 2, Number 3])
