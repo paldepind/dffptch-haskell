@@ -10,6 +10,7 @@ import Data.List
 import Data.Scientific as Scientific
 import qualified Data.Char as Char
 import Data.Ord
+import Debug.Trace
 
 data Delta = Delta
     { adds     :: Object -- Added keys
@@ -117,8 +118,14 @@ handleDels obj (Array dels) = foldr H.delete obj deleted
   where keys = (createKeys obj)
         deleted = map (keys V.!) . catMaybes . map valToInt . V.toList $ dels
 
+handleRecs_ :: Object -> V.Vector Text.Text -> [(Text.Text, Value)] -> Object
+handleRecs_ obj _ [] = obj
+handleRecs_ obj keys ((abr,delta):recs) = handleRecs_ newObj keys recs
+  where key = keys V.! keyToIdx abr
+        newObj = H.adjust (flip patch delta) key obj
+
 handleRecs :: Object -> Value -> Object
-handleRecs obj recs = obj
+handleRecs obj (Object recs) = handleRecs_ obj (createKeys obj) $ H.toList recs
 
 fields = map Text.pack ["a", "m", "d", "r"]
 handlers = [handleAdds, handleMods, handleDels, handleRecs]

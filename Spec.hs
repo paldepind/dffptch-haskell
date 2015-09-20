@@ -143,3 +143,6 @@ main = hspec $ do
 
     it "handles added fields" $
       patch dummyUser (diff dummyUser dummyUser2) `shouldBe` dummyUser2
+
+    it "handles recursively changed fields" $
+      patch dummyHorse (diff dummyHorse dummyHorse2) `shouldBe` dummyHorse2
