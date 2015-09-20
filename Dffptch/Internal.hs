@@ -102,7 +102,7 @@ valToInt :: Value -> Maybe Int
 valToInt (Number scient) = Scientific.toBoundedInteger scient
 
 handleAdds :: Object -> Value -> Object
-handleAdds obj adds = obj
+handleAdds obj (Object adds) = adds `H.union` obj
 
 handleMods_ :: Object -> V.Vector Text.Text -> [(Text.Text, Value)] -> Object
 handleMods_ obj _ [] = obj
