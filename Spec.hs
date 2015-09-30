@@ -1,74 +1,75 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module DffptchSpec where
 
 import Test.Hspec
 import Data.Aeson
 import qualified Data.Vector as V
 import qualified Data.HashMap.Strict as H
---import qualified Data.Text.Lazy as L
-import Data.Text (pack)
+import Data.Text()
 
 
 import Dffptch.Internal
 
 objFromList = Object . H.fromList
 
-dummyUser = objFromList [ (pack "name", String $ pack "Simon")
-                        , (pack "age", Number 21)
-                        , (pack "male", Bool True)
+dummyUser = objFromList [ ("name", String $ "Simon")
+                        , ("age", Number 21)
+                        , ("male", Bool True)
                         ]
 
-dummyUser2 = objFromList [ (pack "name", String $ pack "Simon")
-                         , (pack "age", Number 21)
-                         , (pack "location", String $ pack "Denmark")
-                         , (pack "male", Bool True)
+dummyUser2 = objFromList [ ("name", String $ "Simon")
+                         , ("age", Number 21)
+                         , ("location", String $ "Denmark")
+                         , ("male", Bool True)
                          ]
 
-dummyUser3 = objFromList [ (pack "name", String $ pack "Simon")
-                         , (pack "age", Number 21)
-                         , (pack "male", Bool True)
-                         , (pack "occupation", String $ pack "Programmer")
+dummyUser3 = objFromList [ ("name", String $ "Simon")
+                         , ("age", Number 21)
+                         , ("male", Bool True)
+                         , ("occupation", String $ "Programmer")
                          ]
 
-dummyUser4 = objFromList [ (pack "name", String $ pack "Simon")
-                         , (pack "age", Number 21)
-                         , (pack "male", Bool True)
-                         , (pack "sex", String $ pack "Male")
-                         , (pack "occupation", String $ pack "Programmer")
+dummyUser4 = objFromList [ ("name", String $ "Simon")
+                         , ("age", Number 21)
+                         , ("male", Bool True)
+                         , ("sex", String $ "Male")
+                         , ("occupation", String $ "Programmer")
                          ]
 
-dummyUser5 = objFromList [ (pack "name", String $ pack "Simon")
-                         , (pack "age", Number 21)
+dummyUser5 = objFromList [ ("name", String $ "Simon")
+                         , ("age", Number 21)
                          ]
 
-dummyUser6 = objFromList [ (pack "age", Number 21)
+dummyUser6 = objFromList [ ("age", Number 21)
                          ]
 
-dummyUser7 = objFromList [ (pack "name", String $ pack "Simon")
-                         , (pack "age", Number 21)
-                         , (pack "male", Bool False)
+dummyUser7 = objFromList [ ("name", String $ "Simon")
+                         , ("age", Number 21)
+                         , ("male", Bool False)
                          ]
 
-dummyHorse = objFromList [ (pack "type", String $ pack "horse")
-                         , (pack "parent", objFromList
-                             [ (pack "type", String $ pack "goat")
-                             , (pack "color", String $ pack "brown")
+dummyHorse = objFromList [ ("type", String $ "horse")
+                         , ("parent", objFromList
+                             [ ("type", String $ "goat")
+                             , ("color", String $ "brown")
                              ])
                          ]
 
-dummyHorse2 = objFromList [ (pack "type", String $ pack "horse")
-                          , (pack "parent", objFromList
-                              [ (pack "type", String $ pack "goat")
-                              , (pack "color", String $ pack "blue")
+dummyHorse2 = objFromList [ ("type", String $ "horse")
+                          , ("parent", objFromList
+                              [ ("type", String $ "goat")
+                              , ("color", String $ "blue")
                               ])
                           ]
 
-dummyGoat = objFromList [ (pack "type", String $ pack "goat")
-                        , (pack "parent", objFromList
-                            [ (pack "type", String $ pack "goat")
-                            , (pack "color", String $ pack "grey")
-                            , (pack "parent", objFromList
-                                [ (pack "type", String $ pack "horse")
-                                , (pack "color", String $ pack "light-grey")
+dummyGoat = objFromList [ ("type", String $ "goat")
+                        , ("parent", objFromList
+                            [ ("type", String $ "goat")
+                            , ("color", String $ "grey")
+                            , ("parent", objFromList
+                                [ ("type", String $ "horse")
+                                , ("color", String $ "light-grey")
                                 ])
                             ])
                         ]
@@ -77,15 +78,15 @@ arr1 = Array $ V.fromList [Number 1, Number 2, Number 3]
 
 arr2 = Array $ V.fromList [Number 1, Number 4, Number 3]
 
-nestedArr1 = objFromList [ (pack "arr", arr1) ]
-nestedArr2 = objFromList [ (pack "arr", arr2) ]
+nestedArr1 = objFromList [ ("arr", arr1) ]
+nestedArr2 = objFromList [ ("arr", arr2) ]
 
 main :: IO ()
 main = hspec $ do
   describe "toSortedList" $
     it "return a list from hashmap sorted by keys" $
-      (toSortedList . H.fromList) [(pack "b", Number 2), (pack "foo", Number 0), (pack "a", Number 1)]
-      `shouldBe` [(pack "a", Number 1), (pack "b", Number 2), (pack "foo", Number 0)]
+      (toSortedList . H.fromList) [("b", Number 2), ("foo", Number 0), ("a", Number 1)]
+      `shouldBe` [("a", Number 1), ("b", Number 2), ("foo", Number 0)]
 
   describe "diff" $ do
     it "returns its second argument" $
@@ -96,42 +97,42 @@ main = hspec $ do
 
     it "detects added field" $
       diff dummyUser dummyUser2 `shouldBe`
-      objFromList [(pack "a", objFromList [(pack "location", String $ pack "Denmark")])]
+      objFromList [("a", objFromList [("location", String $ "Denmark")])]
 
     it "detects added field at end" $
       diff dummyUser dummyUser3 `shouldBe`
-      objFromList [(pack "a", objFromList [(pack "occupation", String $ pack "Programmer")])]
+      objFromList [("a", objFromList [("occupation", String $ "Programmer")])]
 
     it "detects several added fields at end" $
       diff dummyUser dummyUser4 `shouldBe`
-      objFromList [(pack "a", objFromList [(pack "occupation", String $ pack "Programmer"),
-                                           (pack "sex", String $ pack "Male")])]
+      objFromList [("a", objFromList [("occupation", String $ "Programmer"),
+                                           ("sex", String $ "Male")])]
     it "detects deleted fields at end" $
       diff dummyUser dummyUser5 `shouldBe`
-      objFromList [(pack "d",  Array $ V.fromList [Number 1])]
+      objFromList [("d",  Array $ V.fromList [Number 1])]
 
     it "detects several deleted fields at end" $
       diff dummyUser dummyUser6 `shouldBe`
-      objFromList [(pack "d", Array $ V.fromList [Number 2, Number 1])]
+      objFromList [("d", Array $ V.fromList [Number 2, Number 1])]
 
     it "detects modified fields" $
       diff dummyUser dummyUser7 `shouldBe`
-      objFromList [(pack "m", objFromList [(pack "1", Bool False)])]
+      objFromList [("m", objFromList [("1", Bool False)])]
 
     it "diffs recursively" $
       diff dummyHorse dummyHorse2 `shouldBe`
-      objFromList [(pack "r", objFromList [(pack "0",
-        objFromList [(pack "m", objFromList [(pack "0", String $ pack "blue")])]
+      objFromList [("r", objFromList [("0",
+        objFromList [("m", objFromList [("0", String $ "blue")])]
       )])]
 
     it "handles changes in arrays" $
       diff arr1 arr2
-      `shouldBe` objFromList [(pack "m", objFromList [(pack "1", Number 4)])]
+      `shouldBe` objFromList [("m", objFromList [("1", Number 4)])]
 
     it "handles changes in nested arrays" $
       diff nestedArr1 nestedArr2 `shouldBe`
-      objFromList [(pack "r", objFromList [(pack "0",
-        objFromList [(pack "m", objFromList [(pack "1", Number 4)])]
+      objFromList [("r", objFromList [("0",
+        objFromList [("m", objFromList [("1", Number 4)])]
       )])]
 
   describe "patch" $ do

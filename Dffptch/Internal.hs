@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Dffptch.Internal where
 
 import Data.Maybe
@@ -79,7 +81,7 @@ addIf name prop delta diff =
 
 extractDels :: Delta -> Object -> Object
 extractDels delta diff =
-  if not . null $ dels delta then H.insert (Text.pack "d") (toNumArr delta) diff else diff
+  if not . null $ dels delta then H.insert "d" (toNumArr delta) diff else diff
   where toNumArr = Array . V.fromList . map Number . dels
 
 deltaToObject :: Delta -> Object
@@ -127,7 +129,7 @@ handleRecs_ obj keys ((abr,delta):recs) = handleRecs_ newObj keys recs
 handleRecs :: Object -> Value -> Object
 handleRecs obj (Object recs) = handleRecs_ obj (createKeys obj) $ H.toList recs
 
-fields = map Text.pack ["a", "m", "d", "r"]
+fields = ["a", "m", "d", "r"]
 handlers = [handleAdds, handleMods, handleDels, handleRecs]
 
 patch :: Value -> Value -> Value
