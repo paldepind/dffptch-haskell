@@ -98,26 +98,26 @@ diff old new = new
 keyToIdx :: Text.Text -> Int
 keyToIdx = (subtract 48) . Char.ord . Text.head
 
-createKeys :: Object -> V.Vector Text.Text
-createKeys = V.fromList . sort . H.keys
+getKeys :: Object -> V.Vector Text.Text
+getKeys = V.fromList . sort . H.keys
 
 valToInt :: Value -> Maybe Int
 valToInt (Number scient) = Scientific.toBoundedInteger scient
 
-handleAdds :: Object -> Value -> Object
-handleAdds obj (Object adds) = adds `H.union` obj
+handleAdds :: Value -> Object -> Object
+handleAdds (Object adds) obj = adds `H.union` obj
 
 handleMods_ :: Object -> V.Vector Text.Text -> [(Text.Text, Value)] -> Object
 handleMods_ obj _ [] = obj
 handleMods_ obj keys ((key,val):mods) = handleMods_ newObj keys mods
   where newObj = H.insert (keys V.! keyToIdx key) val obj
 
-handleMods :: Object -> Value -> Object
-handleMods obj (Object mods) = handleMods_ obj (createKeys obj) $ H.toList mods
+handleMods :: Value -> Object -> Object
+handleMods (Object mods) obj = handleMods_ obj (getKeys obj) (H.toList mods)
 
-handleDels :: Object -> Value -> Object
-handleDels obj (Array dels) = foldr H.delete obj deleted
-  where keys = (createKeys obj)
+handleDels :: Value -> Object -> Object
+handleDels (Array dels) obj = foldr H.delete obj deleted
+  where keys = (getKeys obj)
         deleted = map (keys V.!) . catMaybes . map valToInt . V.toList $ dels
 
 handleRecs_ :: Object -> V.Vector Text.Text -> [(Text.Text, Value)] -> Object
@@ -126,14 +126,15 @@ handleRecs_ obj keys ((abr,delta):recs) = handleRecs_ newObj keys recs
   where key = keys V.! keyToIdx abr
         newObj = H.adjust (flip patch delta) key obj
 
-handleRecs :: Object -> Value -> Object
-handleRecs obj (Object recs) = handleRecs_ obj (createKeys obj) $ H.toList recs
+handleRecs :: Value -> Object -> Object
+handleRecs (Object recs) obj = handleRecs_ obj (getKeys obj) $ H.toList recs
 
+-- fields = ZipList ["a", "m", "d", "r"]
+-- handlers = ZipList [handleAdds, handleMods, handleDels, handleRecs]
 fields = ["a", "m", "d", "r"]
 handlers = [handleAdds, handleMods, handleDels, handleRecs]
 
 patch :: Value -> Value -> Value
-patch (Object obj) (Object delta) = Object . foldr ap obj $ fnsVals
-  where fnsVals = zip handlers $ map (flip H.lookup delta) fields
-        ap (fn,val) obj = maybe obj (fn obj) val
+patch (Object obj) (Object delta) = Object $ foldr (.) id (zipWith fns fields handlers) obj
+  where fns field handler = maybe id handler (H.lookup field delta)
 patch obj delta = obj
