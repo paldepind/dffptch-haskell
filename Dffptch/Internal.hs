@@ -93,7 +93,6 @@ diff (Array old) (Array new) = diff (arrToObj old) (arrToObj new)
 diff (Object old) (Object new) = Object . deltaToObject $ findChange o n
   where o = toSortedList old
         n = toSortedList new
-diff old new = new
 
 keyToIdx :: Text.Text -> Int
 keyToIdx = (subtract 48) . Char.ord . Text.head
@@ -101,19 +100,18 @@ keyToIdx = (subtract 48) . Char.ord . Text.head
 getKeys :: Object -> V.Vector Text.Text
 getKeys = V.fromList . sort . H.keys
 
+getKeyIdxs = fmap keyToIdx . getKeys
+
 valToInt :: Value -> Maybe Int
 valToInt (Number scient) = Scientific.toBoundedInteger scient
 
 handleAdds :: Value -> Object -> Object
 handleAdds (Object adds) obj = adds `H.union` obj
 
-handleMods_ :: Object -> V.Vector Text.Text -> [(Text.Text, Value)] -> Object
-handleMods_ obj _ [] = obj
-handleMods_ obj keys ((key,val):mods) = handleMods_ newObj keys mods
-  where newObj = H.insert (keys V.! keyToIdx key) val obj
-
 handleMods :: Value -> Object -> Object
-handleMods (Object mods) obj = handleMods_ obj (getKeys obj) (H.toList mods)
+handleMods (Object mods) obj = H.foldrWithKey go obj mods
+  where keys = getKeys obj
+        go key val obj = H.insert (keys V.! keyToIdx key) val obj
 
 handleDels :: Value -> Object -> Object
 handleDels (Array dels) obj = foldr H.delete obj deleted
@@ -129,12 +127,9 @@ handleRecs_ obj keys ((abr,delta):recs) = handleRecs_ newObj keys recs
 handleRecs :: Value -> Object -> Object
 handleRecs (Object recs) obj = handleRecs_ obj (getKeys obj) $ H.toList recs
 
--- fields = ZipList ["a", "m", "d", "r"]
--- handlers = ZipList [handleAdds, handleMods, handleDels, handleRecs]
 fields = ["a", "m", "d", "r"]
 handlers = [handleAdds, handleMods, handleDels, handleRecs]
 
 patch :: Value -> Value -> Value
 patch (Object obj) (Object delta) = Object $ foldr (.) id (zipWith fns fields handlers) obj
   where fns field handler = maybe id handler (H.lookup field delta)
-patch obj delta = obj
