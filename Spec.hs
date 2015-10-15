@@ -89,9 +89,6 @@ main = hspec $ do
       `shouldBe` [("a", Number 1), ("b", Number 2), ("foo", Number 0)]
 
   describe "diff" $ do
-    it "returns its second argument" $
-      diff (Number 1) (Number 2) `shouldBe` Number 2
-
     it "return empty object on equal object" $
       diff dummyUser dummyUser `shouldBe` Object H.empty
 
@@ -147,3 +144,6 @@ main = hspec $ do
 
     it "handles recursively changed fields" $
       patch dummyHorse (diff dummyHorse dummyHorse2) `shouldBe` dummyHorse2
+
+    it "applies changes to arrays" $
+      patch arr1 (diff arr1 arr2) `shouldBe` arr2

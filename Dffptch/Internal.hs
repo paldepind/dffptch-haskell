@@ -31,6 +31,10 @@ toSortedList = sortOn fst . H.toList
 arrToObj :: Array -> Value
 arrToObj = Object . H.fromList . zip (map (Text.pack . show) [0..]) . V.toList
 
+objToArr :: Object -> Value
+objToArr = Array . V.fromList . map snd . sortBy comp . H.toList
+    where comp (t1, _) (t2, _) = compare t1 t2
+
 idxToText :: Int -> Text.Text
 idxToText = Text.singleton . Char.chr . (+48)
 
@@ -85,8 +89,8 @@ extractDels delta diff =
   where toNumArr = Array . V.fromList . map Number . dels
 
 deltaToObject :: Delta -> Object
-deltaToObject delta = extract H.empty
-  where extract = mconcat $ map ($ delta) [extractDels, addIf 'r' recurses, addIf 'a' adds, addIf 'm' mods]
+deltaToObject delta =
+  foldr ($) H.empty $ map ($ delta) [extractDels, addIf 'r' recurses, addIf 'a' adds, addIf 'm' mods]
 
 diff :: Value -> Value -> Value
 diff (Array old) (Array new) = diff (arrToObj old) (arrToObj new)
@@ -133,3 +137,6 @@ handlers = [handleAdds, handleMods, handleDels, handleRecs]
 patch :: Value -> Value -> Value
 patch (Object obj) (Object delta) = Object $ foldr (.) id (zipWith fns fields handlers) obj
   where fns field handler = maybe id handler (H.lookup field delta)
+patch (Array list) delta =
+    let Object obj = patch (arrToObj list) delta
+    in objToArr obj
