@@ -51,16 +51,16 @@ addAdd :: Delta -> Text -> Value -> Delta
 addAdd d k v = d { adds = H.insert k v (adds d) }
 
 addRm :: Delta -> Int -> Delta
-addRm d idx = d { dels = (fromIntegral idx) : (dels d) }
+addRm d idx = d { dels = fromIntegral idx : dels d }
 
 addChange :: Delta -> (Delta -> Object) -> Int -> Value -> Object
 addChange d field idx val = H.insert (idxToText idx) val (field d)
 
 addMod :: Delta -> Int -> Value -> Delta
-addMod d idx v = d { mods = (addChange d mods idx v) }
+addMod d idx v = d { mods = addChange d mods idx v }
 
 addRec :: Delta -> Int -> Value -> Delta
-addRec d idx v = d { recurses = (addChange d recurses idx v) }
+addRec d idx v = d { recurses = addChange d recurses idx v }
 
 findMod :: Delta -> Int -> Text -> Value -> Value -> Delta
 findMod delta idx key (Object aObj) (Object bObj) =
@@ -93,7 +93,7 @@ diff (Array old) (Array new) = doDiff (toAssocList old) (toAssocList new)
 diff (Object old) (Object new) = doDiff (toSortedList old) (toSortedList new)
 
 keyToIdx :: Text -> Int
-keyToIdx = (subtract 48) . Char.ord . T.head
+keyToIdx = subtract 48 . Char.ord . T.head
 
 getKeys :: Object -> V.Vector Text
 getKeys = V.fromList . sort . H.keys
@@ -109,18 +109,18 @@ handleAdds (Object adds) obj = adds `H.union` obj
 handleMods :: Value -> Object -> Object
 handleMods (Object mods) obj = H.foldrWithKey go obj mods
   where keys = getKeys obj
-        go key val obj = H.insert (keys V.! keyToIdx key) val obj
+        go key = H.insert (keys V.! keyToIdx key)
 
 handleDels :: Value -> Object -> Object
 handleDels (Array dels) obj = foldr H.delete obj deleted
-  where keys = (getKeys obj)
-        deleted = map (keys V.!) . catMaybes . map valToInt . V.toList $ dels
+  where keys = getKeys obj
+        deleted = map (keys V.!) . mapMaybe valToInt . V.toList $ dels
 
 handleRecs_ :: Object -> V.Vector Text -> [(Text, Value)] -> Object
 handleRecs_ obj _ [] = obj
 handleRecs_ obj keys ((abr,delta):recs) = handleRecs_ newObj keys recs
   where key = keys V.! keyToIdx abr
-        newObj = H.adjust (flip patch delta) key obj
+        newObj = H.adjust (`patch` delta) key obj
 
 handleRecs :: Value -> Object -> Object
 handleRecs (Object recs) obj = handleRecs_ obj (getKeys obj) $ H.toList recs
