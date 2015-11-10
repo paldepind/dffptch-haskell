@@ -13,6 +13,12 @@ import Dffptch.Internal
 array :: [Value] -> Value
 array = Array . V.fromList
 
+-- Convenience functions
+addDelta list = Delta (H.fromList list) H.empty [] H.empty
+delDelta dels = Delta H.empty H.empty dels H.empty
+modDelta list = Delta H.empty (H.fromList list) [] H.empty
+recDelta recs = Delta H.empty H.empty [] (H.fromList recs)
+
 dummyUser = object [ "name" .= String "Simon"
                    , "age" .= Number 21
                    , "male" .= True
@@ -90,47 +96,38 @@ main = hspec $ do
 
   describe "diff" $ do
     it "return empty object on equal object" $
-      diff dummyUser dummyUser `shouldBe` Object H.empty
+      diff dummyUser dummyUser `shouldBe` emptyDelta
 
     it "detects added field" $
-      diff dummyUser dummyUser2 `shouldBe`
-      object ["a" .= object ["location" .= String "Denmark"]]
+      diff dummyUser dummyUser2 `shouldBe` addDelta [("location", String "Denmark")]
 
     it "detects added field at end" $
-      diff dummyUser dummyUser3 `shouldBe`
-      object ["a" .= object ["occupation" .= String "Programmer"]]
+      diff dummyUser dummyUser3 `shouldBe` addDelta [("occupation", String "Programmer")]
 
     it "detects several added fields at end" $
       diff dummyUser dummyUser4 `shouldBe`
-      object ["a" .= object ["occupation" .= String "Programmer",
-                                           "sex" .= String "Male"]]
+      addDelta [ ("occupation", (String "Programmer"))
+               , ("sex", (String "Male"))
+               ]
     it "detects deleted fields at end" $
-      diff dummyUser dummyUser5 `shouldBe`
-      object ["d" .= (Array $ V.fromList [Number 1])]
+      diff dummyUser dummyUser5 `shouldBe` delDelta [1]
 
     it "detects several deleted fields at end" $
-      diff dummyUser dummyUser6 `shouldBe`
-      object ["d" .= (Array $ V.fromList [Number 2, Number 1])]
+      diff dummyUser dummyUser6 `shouldBe` delDelta [2, 1]
 
     it "detects modified fields" $
-      diff dummyUser dummyUser7 `shouldBe`
-      object ["m" .= object ["1" .= Bool False]]
+      diff dummyUser dummyUser7 `shouldBe` modDelta [("1", Bool False)]
 
     it "diffs recursively" $
       diff dummyHorse dummyHorse2 `shouldBe`
-      object ["r" .= object ["0" .=
-        object ["m" .= object ["0" .= String "blue"]]
-      ]]
+        recDelta [("0", modDelta [("0", String "blue")])]
 
     it "handles changes in arrays" $
-      diff arr1 arr2
-      `shouldBe` object ["m" .= object ["1" .= Number 4]]
+      diff arr1 arr2 `shouldBe` modDelta [("1", Number 4)]
 
     it "handles changes in nested arrays" $
       diff nestedArr1 nestedArr2 `shouldBe`
-      object ["r" .= object ["0" .=
-        object ["m" .= object ["1" .= Number 4]]
-      ]]
+        recDelta [("0", modDelta [("1", Number 4)])]
 
   describe "patch" $ do
     it "handles modified field" $

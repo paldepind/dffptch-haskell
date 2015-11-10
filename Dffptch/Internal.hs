@@ -20,8 +20,8 @@ data Delta = Delta
     { adds     :: Object -- Added keys
     , mods     :: Object -- Modified fields
     , dels     :: [Scientific] -- Deleted fields
-    , recurses :: Object -- Recursively change fields
-    } deriving (Show)
+    , recurses :: H.HashMap Text Delta -- Recursively change fields
+    } deriving (Show, Eq)
 
 emptyDelta = Delta H.empty H.empty [] H.empty
 
@@ -41,8 +41,7 @@ arrToObj :: Array -> Value
 arrToObj = Object . H.fromList . zip (map (T.pack . show) [0..]) . V.toList
 
 objToArr :: Object -> Value
-objToArr = Array . V.fromList . map snd . sortBy comp . H.toList
-  where comp (t1, _) (t2, _) = compare t1 t2
+objToArr = Array . V.fromList . map snd . sortBy (comparing fst) . H.toList
 
 idxToText :: Int -> Text
 idxToText = T.singleton . Char.chr . (+48)
@@ -59,13 +58,13 @@ addChange d field idx val = H.insert (idxToText idx) val (field d)
 addMod :: Delta -> Int -> Value -> Delta
 addMod d idx v = d { mods = addChange d mods idx v }
 
-addRec :: Delta -> Int -> Value -> Delta
-addRec d idx v = d { recurses = addChange d recurses idx v }
+addRec :: Delta -> Int -> Delta -> Delta
+addRec d idx v = d { recurses = H.insert (idxToText idx) v (recurses d) }
 
 findMod :: Delta -> Int -> Text -> Value -> Value -> Delta
 findMod delta idx key (Object aObj) (Object bObj) =
   if aObj == bObj then delta else addRec delta idx recursiveDelta
-  where recursiveDelta = toJSON $ findChange (H.toList aObj) (H.toList bObj)
+  where recursiveDelta = findChange (H.toList aObj) (H.toList bObj)
 findMod delta idx key (Array aArr) (Array bArr) =
   findMod delta idx key (arrToObj aArr) (arrToObj bArr)
 findMod delta idx key aVal bVal =
@@ -86,9 +85,9 @@ findChange as bs = snd $ mergeWith (comparing fst) fa fb fab (0, emptyDelta) as 
   fb  (aIdx, delta)              (bKey, bVal) = (aIdx    , addAdd delta bKey bVal)
   fab (aIdx, delta) (aKey, aVal) (bKey, bVal) = (aIdx + 1, findMod delta aIdx aKey aVal bVal)
 
-doDiff old new = toJSON $ findChange old new
+doDiff old new = findChange old new
 
-diff :: Value -> Value -> Value
+diff :: Value -> Value -> Delta
 diff (Array old) (Array new) = doDiff (toAssocList old) (toAssocList new)
 diff (Object old) (Object new) = doDiff (toSortedList old) (toSortedList new)
 
@@ -100,37 +99,35 @@ getKeys = V.fromList . sort . H.keys
 
 getKeyIdxs = fmap keyToIdx . getKeys
 
-valToInt :: Value -> Maybe Int
-valToInt (Number scient) = Scientific.toBoundedInteger scient
+valToInt :: Scientific -> Maybe Int
+valToInt scient = Scientific.toBoundedInteger scient
 
-handleAdds :: Value -> Object -> Object
-handleAdds (Object adds) obj = adds `H.union` obj
+handleAdds :: Object -> Object -> Object
+handleAdds adds obj = adds `H.union` obj
 
-handleMods :: Value -> Object -> Object
-handleMods (Object mods) obj = H.foldrWithKey go obj mods
+handleMods :: Object -> Object -> Object
+handleMods mods obj = H.foldrWithKey go obj mods
   where keys = getKeys obj
         go key = H.insert (keys V.! keyToIdx key)
 
-handleDels :: Value -> Object -> Object
-handleDels (Array dels) obj = foldr H.delete obj deleted
+handleDels :: [Scientific] -> Object -> Object
+handleDels dels obj = foldr H.delete obj deleted
   where keys = getKeys obj
-        deleted = map (keys V.!) . mapMaybe valToInt . V.toList $ dels
+        deleted = map (keys V.!) . mapMaybe valToInt $ dels
 
-handleRecs_ :: Object -> V.Vector Text -> [(Text, Value)] -> Object
+handleRecs_ :: Object -> V.Vector Text -> [(Text, Delta)] -> Object
 handleRecs_ obj _ [] = obj
 handleRecs_ obj keys ((abr,delta):recs) = handleRecs_ newObj keys recs
   where key = keys V.! keyToIdx abr
         newObj = H.adjust (`patch` delta) key obj
 
-handleRecs :: Value -> Object -> Object
-handleRecs (Object recs) obj = handleRecs_ obj (getKeys obj) $ H.toList recs
+handleRecs :: H.HashMap Text Delta -> Object -> Object
+handleRecs recs obj = handleRecs_ obj (getKeys obj) $ H.toList recs
 
-fields = ["a", "m", "d", "r"]
-handlers = [handleAdds, handleMods, handleDels, handleRecs]
-
-patch :: Value -> Value -> Value
-patch (Object obj) (Object delta) = Object $ foldr (.) id (zipWith fns fields handlers) obj
-  where fns field handler = maybe id handler (H.lookup field delta)
-patch (Array list) delta =
+patch :: Value -> Delta -> Value
+patch (Object obj) delta = Object $ (handleAdds $ adds delta) .
+                                    (handleMods $ mods delta) .
+                                    (handleDels $ dels delta) .
+                                    (handleRecs $ recurses delta) $ obj
   let Object obj = patch (arrToObj list) delta
   in objToArr obj
