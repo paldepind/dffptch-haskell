@@ -125,9 +125,10 @@ handleRecs :: H.HashMap Text Delta -> Object -> Object
 handleRecs recs obj = handleRecs_ obj (getKeys obj) $ H.toList recs
 
 patch :: Value -> Delta -> Value
-patch (Object obj) delta = Object $ (handleAdds $ adds delta) .
-                                    (handleMods $ mods delta) .
-                                    (handleDels $ dels delta) .
-                                    (handleRecs $ recurses delta) $ obj
+patch (Object obj) delta = Object $ handleAdds (adds delta) .
+                                    handleMods (mods delta) .
+                                    handleDels (dels delta) .
+                                    handleRecs (recurses delta) $ obj
+patch (Array list) delta =
   let Object obj = patch (arrToObj list) delta
   in objToArr obj
