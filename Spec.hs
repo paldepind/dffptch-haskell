@@ -129,6 +129,27 @@ main = hspec $ do
       diff nestedArr1 nestedArr2 `shouldBe`
         recDelta [("0", modDelta [("1", Number 4)])]
 
+    it "is convertable to json" $
+      toJSON (diff dummyUser dummyUser2) `shouldBe`
+        object ["a" .= object ["location" .= String "Denmark"]]
+
+  describe "parsing deltas" $ do
+    it "parses empty delta" $
+      decode "{}" `shouldBe` Just emptyDelta
+
+    it "parses delta with only additions" $
+      decode "{\"a\":{\"location\":\"Denmark\"}}" `shouldBe` 
+        Just (addDelta [("location", String "Denmark")])
+
+    it "parses delta with only additions" $
+      decode "{\"m\":{\"1\":\"Denmark\"}}" `shouldBe` 
+        Just (modDelta [("1", String "Denmark")])
+
+    it "parses delta with deletion and recursion" $
+      decode "{\"d\":[1,2],\"r\":{\"0\":{\"m\":{\"1\":\"Denmark\"}}}}" `shouldBe` 
+        Just (Delta H.empty H.empty [1, 2] (H.fromList [("0", modDelta [("1", "Denmark")])]))
+        -- Just (modDelta [("1", String "Denmark")])
+
   describe "patch" $ do
     it "handles modified field" $
       patch dummyUser (diff dummyUser dummyUser7) `shouldBe` dummyUser7

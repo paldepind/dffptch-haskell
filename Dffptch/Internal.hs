@@ -11,10 +11,11 @@ import qualified Data.Vector as V
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.List
-import Data.Scientific as Scientific
+import Data.Scientific as S
 import qualified Data.Char as Char
 import Data.Ord
 import Debug.Trace
+import Control.Applicative
 
 data Delta = Delta
     { adds     :: Object -- Added keys
@@ -30,6 +31,16 @@ notEmptyVal v = v /= emptyArray && v /= emptyObject
 instance ToJSON Delta where
   toJSON (Delta adds mods dels recs) =
     object $ filter (notEmptyVal . snd) ["a" .= adds, "m" .= mods, "d" .= dels, "r" .= recs]
+
+defaultToEmpty :: (FromJSON a, Monoid a) => Object -> Text -> Parser a
+defaultToEmpty o key = o .:? key .!= mempty
+
+instance FromJSON Delta where
+  parseJSON = withObject "delta" $ \d ->
+    Delta <$> defaultToEmpty d "a"
+          <*> defaultToEmpty d "m"
+          <*> defaultToEmpty d "d"
+          <*> defaultToEmpty d "r"
 
 toSortedList :: Object -> [(Text, Value)]
 toSortedList = sortOn fst . H.toList
@@ -85,11 +96,9 @@ findChange as bs = snd $ mergeWith (comparing fst) fa fb fab (0, emptyDelta) as 
   fb  (aIdx, delta)              (bKey, bVal) = (aIdx    , addAdd delta bKey bVal)
   fab (aIdx, delta) (aKey, aVal) (bKey, bVal) = (aIdx + 1, findMod delta aIdx aKey aVal bVal)
 
-doDiff old new = findChange old new
-
 diff :: Value -> Value -> Delta
-diff (Array old) (Array new) = doDiff (toAssocList old) (toAssocList new)
-diff (Object old) (Object new) = doDiff (toSortedList old) (toSortedList new)
+diff (Array old) (Array new) = findChange (toAssocList old) (toAssocList new)
+diff (Object old) (Object new) = findChange (toSortedList old) (toSortedList new)
 
 keyToIdx :: Text -> Int
 keyToIdx = subtract 48 . Char.ord . T.head
@@ -98,9 +107,6 @@ getKeys :: Object -> V.Vector Text
 getKeys = V.fromList . sort . H.keys
 
 getKeyIdxs = fmap keyToIdx . getKeys
-
-valToInt :: Scientific -> Maybe Int
-valToInt scient = Scientific.toBoundedInteger scient
 
 handleAdds :: Object -> Object -> Object
 handleAdds adds obj = adds `H.union` obj
@@ -113,7 +119,7 @@ handleMods mods obj = H.foldrWithKey go obj mods
 handleDels :: [Scientific] -> Object -> Object
 handleDels dels obj = foldr H.delete obj deleted
   where keys = getKeys obj
-        deleted = map (keys V.!) . mapMaybe valToInt $ dels
+        deleted = map (keys V.!) . mapMaybe S.toBoundedInteger $ dels
 
 handleRecs_ :: Object -> V.Vector Text -> [(Text, Delta)] -> Object
 handleRecs_ obj _ [] = obj
