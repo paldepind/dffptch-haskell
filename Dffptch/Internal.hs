@@ -48,8 +48,8 @@ toSortedList = sortOn fst . H.toList
 toAssocList :: Array -> [(Text, Value)]
 toAssocList = zip (map (T.pack . show) [0..]) . V.toList
 
-arrToObj :: Array -> Value
-arrToObj = Object . H.fromList . zip (map (T.pack . show) [0..]) . V.toList
+arrToObj :: Array -> Object
+arrToObj = H.fromList . zip (map (T.pack . show) [0..]) . V.toList
 
 objToArr :: Object -> Value
 objToArr = Array . V.fromList . map snd . sortBy (comparing fst) . H.toList
@@ -77,7 +77,7 @@ findMod delta idx key (Object aObj) (Object bObj) =
   if aObj == bObj then delta else addRec delta idx recursiveDelta
   where recursiveDelta = findChange (H.toList aObj) (H.toList bObj)
 findMod delta idx key (Array aArr) (Array bArr) =
-  findMod delta idx key (arrToObj aArr) (arrToObj bArr)
+  findMod delta idx key (Object $ arrToObj aArr) (Object $ arrToObj bArr)
 findMod delta idx key aVal bVal =
   if aVal == bVal then delta else addMod delta idx bVal
 
@@ -96,9 +96,12 @@ findChange as bs = snd $ mergeWith (comparing fst) fa fb fab (0, emptyDelta) as 
   fb  (aIdx, delta)              (bKey, bVal) = (aIdx    , addAdd delta bKey bVal)
   fab (aIdx, delta) (aKey, aVal) (bKey, bVal) = (aIdx + 1, findMod delta aIdx aKey aVal bVal)
 
-diff :: Value -> Value -> Delta
-diff (Array old) (Array new) = findChange (toAssocList old) (toAssocList new)
-diff (Object old) (Object new) = findChange (toSortedList old) (toSortedList new)
+doDiff :: Value -> Value -> Delta
+doDiff (Array old) (Array new) = findChange (toAssocList old) (toAssocList new)
+doDiff (Object old) (Object new) = findChange (toSortedList old) (toSortedList new)
+
+diff :: (ToJSON a, ToJSON b) => a -> b -> Delta
+diff a b = doDiff (toJSON a) (toJSON b)
 
 keyToIdx :: Text -> Int
 keyToIdx = subtract 48 . Char.ord . T.head
@@ -130,11 +133,16 @@ handleRecs_ obj keys ((abr,delta):recs) = handleRecs_ newObj keys recs
 handleRecs :: H.HashMap Text Delta -> Object -> Object
 handleRecs recs obj = handleRecs_ obj (getKeys obj) $ H.toList recs
 
-patch :: Value -> Delta -> Value
-patch (Object obj) delta = Object $ handleAdds (adds delta) .
-                                    handleMods (mods delta) .
-                                    handleDels (dels delta) .
-                                    handleRecs (recurses delta) $ obj
-patch (Array list) delta =
-  let Object obj = patch (arrToObj list) delta
-  in objToArr obj
+doPatch delta = handleAdds (adds delta) .
+                handleMods (mods delta) .
+                handleDels (dels delta) .
+                handleRecs (recurses delta)
+
+patch :: (ToJSON a, FromJSON a) => a -> Delta -> a
+patch a delta =
+  let val = toJSON a
+  in case val of
+    Object obj -> let (Success patched) = fromJSON $ Object $ doPatch delta obj
+                  in patched
+    Array list -> let (Success patched) = fromJSON $ objToArr $ doPatch delta (arrToObj list)
+                  in patched
