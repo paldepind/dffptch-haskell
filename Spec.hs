@@ -194,4 +194,4 @@ main = hspec $ do
 
   describe "diffing and patching recods" $ do
     it "diffs records" $
-      diff animal1 animal2 `shouldBe` modDelta [("0", Number 13), ("1", Bool False), ("2", "lightbrown")]
+      diff animal1 animal2 `shouldBe` modDelta [("0", Number 13), ("1", Bool False), ("2", "lighbrown")]
