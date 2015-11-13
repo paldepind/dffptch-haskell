@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DeriveGeneric #-}
 
 module DffptchSpec where
 
@@ -7,6 +8,7 @@ import Data.Aeson
 import qualified Data.Vector as V
 import qualified Data.HashMap.Strict as H
 import Data.Text()
+import GHC.Generics
 
 import Dffptch.Internal
 
@@ -87,6 +89,30 @@ arr2 = Array $ V.fromList [Number 1, Number 4, Number 3]
 nestedArr1 = object [ "arr" .= arr1 ]
 nestedArr2 = object [ "arr" .= arr2 ]
 
+data Animal = Animal
+  { color :: String
+  , name :: String
+  , age :: Int
+  , alive :: Bool
+  } deriving (Show, Generic)
+
+instance ToJSON Animal
+instance FromJSON Animal
+
+animal1 = Animal
+  { color = "brown"
+  , name = "Thumper"
+  , age = 12
+  , alive = True
+  }
+
+animal2 = Animal
+  { color = "lightbrown"
+  , name = "Thumper"
+  , age = 13
+  , alive = False
+  }
+
 main :: IO ()
 main = hspec $ do
   describe "toSortedList" $
@@ -165,3 +191,7 @@ main = hspec $ do
 
     it "applies changes to arrays" $
       patch arr1 (diff arr1 arr2) `shouldBe` arr2
+
+  describe "diffing and patching recods" $ do
+    it "diffs records" $
+      diff animal1 animal2 `shouldBe` modDelta [("0", Number 13), ("1", Bool False), ("2", "lightbrown")]
