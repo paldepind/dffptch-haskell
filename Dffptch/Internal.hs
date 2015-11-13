@@ -17,25 +17,28 @@ import Data.Ord
 import Debug.Trace
 import Control.Applicative
 
-data Delta = Delta
+-- `a` is a phantom type that indicates the type that the delta applies to
+-- this means that trying to patch a delta to wrong types will result in
+-- a compile time type error
+data Delta a = Delta
     { adds     :: Object -- Added keys
     , mods     :: Object -- Modified fields
     , dels     :: [Scientific] -- Deleted fields
-    , recurses :: H.HashMap Text Delta -- Recursively change fields
+    , recurses :: H.HashMap Text (Delta Value) -- Recursively change fields
     } deriving (Show, Eq)
 
 emptyDelta = Delta H.empty H.empty [] H.empty
 
 notEmptyVal v = v /= emptyArray && v /= emptyObject
 
-instance ToJSON Delta where
+instance ToJSON (Delta a) where
   toJSON (Delta adds mods dels recs) =
     object $ filter (notEmptyVal . snd) ["a" .= adds, "m" .= mods, "d" .= dels, "r" .= recs]
 
 defaultToEmpty :: (FromJSON a, Monoid a) => Object -> Text -> Parser a
 defaultToEmpty o key = o .:? key .!= mempty
 
-instance FromJSON Delta where
+instance FromJSON (Delta a) where
   parseJSON = withObject "delta" $ \d ->
     Delta <$> defaultToEmpty d "a"
           <*> defaultToEmpty d "m"
@@ -57,22 +60,22 @@ objToArr = Array . V.fromList . map snd . sortBy (comparing fst) . H.toList
 idxToText :: Int -> Text
 idxToText = T.singleton . Char.chr . (+48)
 
-addAdd :: Delta -> Text -> Value -> Delta
+addAdd :: Delta a -> Text -> Value -> Delta a
 addAdd d k v = d { adds = H.insert k v (adds d) }
 
-addRm :: Delta -> Int -> Delta
+addRm :: Delta a -> Int -> Delta a
 addRm d idx = d { dels = fromIntegral idx : dels d }
 
-addChange :: Delta -> (Delta -> Object) -> Int -> Value -> Object
+addChange :: Delta a -> (Delta a -> Object) -> Int -> Value -> Object
 addChange d field idx val = H.insert (idxToText idx) val (field d)
 
-addMod :: Delta -> Int -> Value -> Delta
+addMod :: Delta a -> Int -> Value -> Delta a
 addMod d idx v = d { mods = addChange d mods idx v }
 
-addRec :: Delta -> Int -> Delta -> Delta
+addRec :: Delta a -> Int -> Delta Value -> Delta a
 addRec d idx v = d { recurses = H.insert (idxToText idx) v (recurses d) }
 
-findMod :: Delta -> Int -> Text -> Value -> Value -> Delta
+findMod :: Delta a -> Int -> Text -> Value -> Value -> Delta a
 findMod delta idx key (Object aObj) (Object bObj) =
   if aObj == bObj then delta else addRec delta idx recursiveDelta
   where recursiveDelta = findChange (H.toList aObj) (H.toList bObj)
@@ -90,17 +93,17 @@ mergeWith comparer fa fb fab = go where
     LT -> go (fa acc a   ) as  bss
     GT -> go (fb acc    b) ass bs
 
-findChange :: [(Text, Value)] -> [(Text, Value)] -> Delta
+findChange :: [(Text, Value)] -> [(Text, Value)] -> Delta a
 findChange as bs = snd $ mergeWith (comparing fst) fa fb fab (0, emptyDelta) as bs where
   fa  (aIdx, delta) (aKey, aVal)              = (aIdx + 1, addRm delta aIdx)
   fb  (aIdx, delta)              (bKey, bVal) = (aIdx    , addAdd delta bKey bVal)
   fab (aIdx, delta) (aKey, aVal) (bKey, bVal) = (aIdx + 1, findMod delta aIdx aKey aVal bVal)
 
-doDiff :: Value -> Value -> Delta
+doDiff :: Value -> Value -> Delta a
 doDiff (Array old) (Array new) = findChange (toAssocList old) (toAssocList new)
 doDiff (Object old) (Object new) = findChange (toSortedList old) (toSortedList new)
 
-diff :: (ToJSON a) => a -> a -> Delta
+diff :: (ToJSON a) => a -> a -> Delta a
 diff a b = doDiff (toJSON a) (toJSON b)
 
 keyToIdx :: Text -> Int
@@ -124,13 +127,13 @@ handleDels dels obj = foldr H.delete obj deleted
   where keys = getKeys obj
         deleted = map (keys V.!) . mapMaybe S.toBoundedInteger $ dels
 
-handleRecs_ :: Object -> V.Vector Text -> [(Text, Delta)] -> Object
+handleRecs_ :: Object -> V.Vector Text -> [(Text, Delta Value)] -> Object
 handleRecs_ obj _ [] = obj
 handleRecs_ obj keys ((abr,delta):recs) = handleRecs_ newObj keys recs
   where key = keys V.! keyToIdx abr
         newObj = H.adjust (`patch` delta) key obj
 
-handleRecs :: H.HashMap Text Delta -> Object -> Object
+handleRecs :: H.HashMap Text (Delta Value) -> Object -> Object
 handleRecs recs obj = handleRecs_ obj (getKeys obj) $ H.toList recs
 
 doPatch delta = handleAdds (adds delta) .
@@ -138,7 +141,7 @@ doPatch delta = handleAdds (adds delta) .
                 handleDels (dels delta) .
                 handleRecs (recurses delta)
 
-patch :: (ToJSON a, FromJSON a) => a -> Delta -> a
+patch :: (ToJSON a, FromJSON a) => a -> Delta a -> a
 patch a delta =
   let val = toJSON a
   in case val of
