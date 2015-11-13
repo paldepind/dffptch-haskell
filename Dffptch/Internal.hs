@@ -100,7 +100,7 @@ doDiff :: Value -> Value -> Delta
 doDiff (Array old) (Array new) = findChange (toAssocList old) (toAssocList new)
 doDiff (Object old) (Object new) = findChange (toSortedList old) (toSortedList new)
 
-diff :: (ToJSON a, ToJSON b) => a -> b -> Delta
+diff :: (ToJSON a) => a -> a -> Delta
 diff a b = doDiff (toJSON a) (toJSON b)
 
 keyToIdx :: Text -> Int
